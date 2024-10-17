@@ -5,6 +5,8 @@
 #include <thread>
 #include <chrono>
 
+bool exit_found = false;
+
 // Representação do labirinto
 using Maze = std::vector<std::vector<char>>;
 
@@ -18,7 +20,6 @@ struct Position {
 Maze maze;
 int num_rows;
 int num_cols;
-std::stack<Position> valid_positions;
 
 // Função para carregar o labirinto de um arquivo
 Position load_maze(const std::string& file_name) {
@@ -106,7 +107,7 @@ bool is_valid_position(int row, int col) {
 }
 
 // Função principal para navegar pelo labirinto
-bool walk(Position pos) {
+void walk(Position pos) {
     // TODO: Implemente a lógica de navegação aqui
     // 1. Marque a posição atual como visitada (maze[pos.row][pos.col] = '.'): OK
     // 2. Chame print_maze() para mostrar o estado atual do labirinto: OK
@@ -123,18 +124,19 @@ bool walk(Position pos) {
     //    c. Se walk retornar true, propague o retorno (retorne true): OK
     // 7. Se todas as posições foram exploradas sem encontrar a saída, retorne false: OK
 
+    // walk_calls++; // Incrementa o contador de chamadas da função walk
+
+    std::stack<Position> valid_positions;
+
     bool is_exit = maze[pos.row][pos.col] == 's';
 
     maze[pos.row][pos.col] = '.';
 
-    print_maze();
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
-
-    system("cls");
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     if (is_exit) {
-        return true;
+        exit_found = true;
+        return;
     }
 
     if (is_valid_position(pos.row-1, pos.col)) { // Verifica posição de cima
@@ -152,17 +154,27 @@ bool walk(Position pos) {
     if (is_valid_position(pos.row, pos.col+1)) { // Verifica posição da direita
         valid_positions.push({pos.row, pos.col+1});
     }
-    
-    while (!valid_positions.empty()) {
+
+    if (valid_positions.empty()) {
+        return;
+    } else if (valid_positions.size() > 1) {
+        while (valid_positions.size() > 1) {
+            Position next_pos = valid_positions.top();
+            valid_positions.pop();
+
+            std::thread helper(walk, next_pos);
+            helper.detach();
+        }
         Position next_pos = valid_positions.top();
         valid_positions.pop();
-
-        if (walk(next_pos)) {
-            return true;
-        }
+        walk(next_pos);
+    } else {
+        Position next_pos = valid_positions.top();
+        valid_positions.pop();
+        walk(next_pos);
     }
     
-    return false;
+    return;
 }
 
 int main(int argc, char* argv[]) {
@@ -178,15 +190,19 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // print_maze();
+    std::thread start(walk, initial_pos);
+    start.detach();
 
-    bool exit_found = walk(initial_pos);
-
-    if (exit_found) {
-        std::cout << "Saída encontrada!" << std::endl;
-    } else {
-        std::cout << "Não foi possível encontrar a saída." << std::endl;
+    while (!exit_found) {
+        system("cls");
+        print_maze();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+
+    system("cls");
+    print_maze();
+
+    std::cout << "Saída encontrada!" << std::endl;
 
     return 0;
 }
